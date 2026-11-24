@@ -1,0 +1,1909 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full antialiased selection:bg-fuchsia-300 selection:text-slate-900">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>LUMO — Living Countdown Lock Screen</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            display: ['Plus Jakarta Sans', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* ===================================================================== */
+    /* DYNAMIC SNELL'S-LAW LIQUID GLASS & THEME VARIABLES                    */
+    /* ===================================================================== */
+    :root {
+      --lg-tint-opacity: 0.18;
+      --lg-box-tint: 255, 255, 255;
+      --lg-bg-color: rgba(var(--lg-box-tint), var(--lg-tint-opacity));
+      --lg-highlight: rgba(255, 255, 255, 0.75);
+      --lg-primary-text: #ffffff;
+      --lg-accent-color: #fde047;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100dvh;
+      color: var(--lg-primary-text);
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+      background: #050508;
+      touch-action: manipulation;
+    }
+
+    /* Dynamic Lock Screen Layout Modes */
+    main.layout-classic {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      text-align: center;
+    }
+
+    main.layout-minimal {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: space-between;
+      text-align: left;
+    }
+    main.layout-minimal #lock-date,
+    main.layout-minimal #lock-time {
+      text-align: left;
+      width: 100%;
+    }
+    main.layout-minimal #lock-time {
+      font-weight: 300;
+      letter-spacing: -0.05em;
+    }
+
+    main.layout-split {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      align-content: space-between;
+      text-align: center;
+    }
+    @media (min-width: 640px) {
+      main.layout-split {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto 1fr;
+        grid-template-areas:
+          "tophead tophead"
+          "title title"
+          "countdown lumo";
+        align-items: center;
+      }
+      main.layout-split #lock-date, main.layout-split #lock-time { grid-area: tophead; }
+      main.layout-split > div:nth-child(3) { grid-area: title; }
+      main.layout-split #countdown-wrap { grid-area: countdown; }
+      main.layout-split #lumo-stage { grid-area: lumo; }
+    }
+
+    main.layout-capsule #countdown-wrap .glass-tile,
+    main.layout-capsule #speech-cloud-wrap {
+      border-radius: 9999px !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.4);
+    }
+
+    main.layout-zen #lock-time {
+      font-size: clamp(3.5rem, 10vw, 6.5rem);
+      font-weight: 300;
+      opacity: 0.95;
+    }
+    main.layout-zen #countdown-wrap {
+      transform: scale(0.92);
+      opacity: 0.9;
+    }
+
+    /* Core Liquid Glass Tile Architecture */
+    .glass-tile {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      font-weight: 600;
+      color: var(--lg-primary-text);
+      background: transparent;
+      border-radius: 2rem;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28), 0 0 24px rgba(0, 0, 0, 0.12);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.4s ease, opacity 0.4s ease;
+    }
+
+    .glass-filter {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      isolation: isolate;
+      pointer-events: none;
+    }
+
+    .glass-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: var(--lg-bg-color);
+      pointer-events: none;
+      transition: background 0.3s ease;
+    }
+
+    .glass-specular {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      border-radius: inherit;
+      overflow: hidden;
+      box-shadow: inset 1px 1px 0 var(--lg-highlight), inset 0 0 6px var(--lg-highlight);
+      pointer-events: none;
+    }
+
+    .glass-content {
+      position: relative;
+      z-index: 3;
+      width: 100%;
+    }
+
+    /* Cloud Speech Bubble with Directional Tail */
+    .speech-cloud {
+      position: relative;
+      border-radius: 1.5rem;
+      filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+    }
+    .speech-cloud::after {
+      content: '';
+      position: absolute;
+      bottom: -9px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 9px solid transparent;
+      border-right: 9px solid transparent;
+      border-top: 10px solid rgba(255, 255, 255, 0.35);
+    }
+
+    /* ===================================================================== */
+    /* LUMO'S 12 ORGANIC HUMAN-LIKE ANIMATIONS                               */
+    /* ===================================================================== */
+    @keyframes lumoFloat {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(0.8deg); }
+    }
+
+    /* 1. Gentle Bounce (Happy / Proud) */
+    @keyframes lumoBounce {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-16px) scale(0.96, 1.05); }
+      60% { transform: translateY(4px) scale(1.06, 0.94); }
+      80% { transform: translateY(-4px) scale(0.98, 1.02); }
+      100% { transform: translateY(0) scale(1); }
+    }
+
+    /* 2. Head Shake (Worried / Sleepy) */
+    @keyframes lumoHeadShake {
+      0%, 100% { transform: translateX(0) rotate(0deg); }
+      20% { transform: translateX(-9px) rotate(-4deg); }
+      40% { transform: translateX(8px) rotate(3.5deg); }
+      60% { transform: translateX(-6px) rotate(-2.5deg); }
+      80% { transform: translateX(4px) rotate(1.5deg); }
+    }
+
+    /* 3. Rhythmic Sway (Calm / Love) */
+    @keyframes lumoSway {
+      0%, 100% { transform: rotate(0deg) translateX(0); }
+      33% { transform: rotate(-5deg) translateX(-6px); }
+      66% { transform: rotate(5deg) translateX(6px); }
+    }
+
+    /* 4. Happy Dance (Excited / Hyped) */
+    @keyframes lumoDance {
+      0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+      20% { transform: translateY(-14px) rotate(-8deg) scale(1.05, 0.95); }
+      40% { transform: translateY(2px) rotate(6deg) scale(0.95, 1.05); }
+      60% { transform: translateY(-10px) rotate(-6deg) scale(1.03, 0.97); }
+      80% { transform: translateY(0) rotate(3deg) scale(0.98, 1.02); }
+    }
+
+    /* 5. Sad Droop (Unchecking Milestones) */
+    @keyframes lumoSadDroop {
+      0% { transform: translateY(0) scale(1); }
+      40% { transform: translateY(12px) scale(1.05, 0.9) rotate(-3deg); }
+      70% { transform: translateY(8px) scale(1.02, 0.95) rotate(-1.5deg); }
+      100% { transform: translateY(0) scale(1) rotate(0deg); }
+    }
+
+    /* 6. Confident Nod & Puff (Focused / Confident) */
+    @keyframes lumoNodPuff {
+      0% { transform: scale(1) translateY(0); }
+      35% { transform: scale(1.1, 1.08) translateY(-6px); }
+      65% { transform: scale(1.05, 1.03) translateY(-2px); }
+      100% { transform: scale(1) translateY(0); }
+    }
+
+    /* 7. Playful Slide */
+    @keyframes lumoSlide {
+      0% { transform: translateX(0) rotate(0); }
+      30% { transform: translateX(-24px) rotate(-10deg); }
+      70% { transform: translateX(18px) rotate(7deg); }
+      100% { transform: translateX(0) rotate(0); }
+    }
+
+    /* 8. Pop In / Out */
+    @keyframes lumoPop {
+      0% { transform: scale(0.75); opacity: 0.6; }
+      50% { transform: scale(1.18); opacity: 1; }
+      75% { transform: scale(0.93); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* 9. Squish & Stretch (Poked) */
+    @keyframes lumoSquish {
+      0% { transform: scale(1, 1); }
+      30% { transform: scale(1.22, 0.78) translateY(8px); }
+      60% { transform: scale(0.88, 1.14) translateY(-8px); }
+      80% { transform: scale(1.05, 0.95); }
+      100% { transform: scale(1, 1); }
+    }
+
+    /* 10. Organic Morph */
+    @keyframes lumoMorph {
+      0%, 100% { transform: scale(1) rotate(0); }
+      50% { transform: scale(1.04, 0.96) rotate(2deg); }
+    }
+
+    /* 11. Drop & Soft Landing */
+    @keyframes lumoDropLand {
+      0% { transform: translateY(-40px) scale(0.9, 1.1); opacity: 0.8; }
+      60% { transform: translateY(10px) scale(1.18, 0.82); opacity: 1; }
+      80% { transform: translateY(-4px) scale(0.95, 1.05); }
+      100% { transform: translateY(0) scale(1); }
+    }
+
+    /* 12. Directional Bumps */
+    @keyframes lumoBumpLeft {
+      0% { transform: translateX(0) rotate(0); }
+      30% { transform: translateX(18px) rotate(6deg) scale(0.92, 1.08); }
+      60% { transform: translateX(-6px) rotate(-2deg); }
+      100% { transform: translateX(0) rotate(0); }
+    }
+    @keyframes lumoBumpRight {
+      0% { transform: translateX(0) rotate(0); }
+      30% { transform: translateX(-18px) rotate(-6deg) scale(0.92, 1.08); }
+      60% { transform: translateX(6px) rotate(2deg); }
+      100% { transform: translateX(0) rotate(0); }
+    }
+    @keyframes lumoBumpTop {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(16px) scale(1.12, 0.85); }
+      60% { transform: translateY(-4px) scale(0.96, 1.04); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    @keyframes lumoBumpBottom {
+      0% { transform: translateY(0) scale(1); }
+      30% { transform: translateY(-18px) scale(0.88, 1.12); }
+      60% { transform: translateY(4px) scale(1.04, 0.96); }
+      100% { transform: translateY(0) scale(1); }
+    }
+
+    /* Star Crest & Particles */
+    @keyframes starPulse {
+      0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.95; }
+      50% { transform: scale(1.16) rotate(10deg); opacity: 1; }
+    }
+    @keyframes particleRise {
+      0% { opacity: 0; transform: translateY(8px) scale(0.4); }
+      25% { opacity: 1; transform: translateY(-14px) scale(1.15); }
+      100% { opacity: 0; transform: translateY(-52px) scale(0.7); }
+    }
+
+    .lumo-float { animation: lumoFloat 4.8s ease-in-out infinite; }
+    .anim-bounce { animation: lumoBounce 0.65s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .anim-headshake { animation: lumoHeadShake 0.65s ease-in-out; }
+    .anim-sway { animation: lumoSway 0.9s ease-in-out; }
+    .anim-dance { animation: lumoDance 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .anim-sad-droop { animation: lumoSadDroop 0.75s ease-in-out; }
+    .anim-nod-puff { animation: lumoNodPuff 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .anim-slide { animation: lumoSlide 0.75s ease-in-out; }
+    .anim-pop { animation: lumoPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .anim-squish { animation: lumoSquish 0.54s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .anim-morph { animation: lumoMorph 0.8s ease-in-out; }
+    .anim-drop-land { animation: lumoDropLand 0.7s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .anim-bump-left { animation: lumoBumpLeft 0.5s ease-out; }
+    .anim-bump-right { animation: lumoBumpRight 0.5s ease-out; }
+    .anim-bump-top { animation: lumoBumpTop 0.5s ease-out; }
+    .anim-bump-bottom { animation: lumoBumpBottom 0.5s ease-out; }
+
+    .lumo-star-crest { transform-origin: 110px 22px; animation: starPulse 3.4s ease-in-out infinite; }
+    .particle-anim { animation: particleRise 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .clean-scroll::-webkit-scrollbar { width: 4px; }
+    .clean-scroll::-webkit-scrollbar-track { background: transparent; }
+    .clean-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.35); border-radius: 99px; }
+
+    /* Custom range slider styling */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 99px;
+      height: 6px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="h-full min-h-dvh bg-[#050508] text-white selection:bg-fuchsia-300 selection:text-slate-900 flex flex-col justify-between relative overflow-x-hidden">
+
+  <!-- SNELL'S-LAW SVG REFRACTION FILTER DEFINITIONS -->
+  <svg width="0" height="0" class="fixed pointer-events-none opacity-0" aria-hidden="true">
+    <defs>
+      <filter id="snell-glass-refract" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.014 0.014" numOctaves="2" seed="9" result="noise"/>
+        <feGaussianBlur in="noise" stdDeviation="2.5" result="smoothed"/>
+        <feDisplacementMap in="SourceGraphic" in2="smoothed" scale="16" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- BACKGROUND WALLPAPER SYSTEM (Live Canvases + Image Layer) -->
+  <div id="wallpaper-wrapper" class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+    <canvas id="live-aurora-canvas" class="absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-700"></canvas>
+    <canvas id="live-cosmic-canvas" class="hidden absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-700"></canvas>
+    <canvas id="live-prism-canvas" class="hidden absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-700"></canvas>
+    <canvas id="live-embers-canvas" class="hidden absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-700"></canvas>
+    <canvas id="live-ocean-canvas" class="hidden absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-700"></canvas>
+    <canvas id="live-velvet-canvas" class="hidden absolute inset-0 w-full h-full object-cover z-[1] transition-opacity duration-700"></canvas>
+
+    <!-- Static Image or Custom Uploaded Photo Layer -->
+    <img id="static-wallpaper-img" class="hidden absolute inset-0 w-full h-full object-cover z-[2] transition-opacity duration-700" crossorigin="anonymous" alt="Lock Screen Wallpaper" />
+    <div id="wallpaper-scrim" class="hidden absolute inset-0 bg-gradient-to-b from-black/40 via-black/25 to-black/50 z-[2]"></div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN LOCK SCREEN CANVAS (PURE CLEAN VERTICAL LAYOUT)                   -->
+  <!-- ===================================================================== -->
+  <main class="relative z-20 flex-1 flex flex-col items-center justify-between max-w-4xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-8 min-h-dvh">
+
+    <!-- 1. LIVE DATE -->
+    <div id="lock-date" class="text-xs sm:text-sm font-extrabold uppercase tracking-widest text-white/90 drop-shadow-md text-center transition-all pt-2">
+      Monday, November 23
+    </div>
+
+    <!-- 2. LIVE TIME -->
+    <div id="lock-time" class="font-display font-extrabold text-6xl sm:text-7xl md:text-8xl tracking-tight text-white drop-shadow-xl tabular-nums text-center my-0.5 sm:my-1">
+      15:59
+    </div>
+
+    <!-- 3. GOAL TITLE PILL -->
+    <div class="text-center my-1 sm:my-2">
+      <span id="lock-goal-title" onclick="openPanelDirectly('roadmap')" class="px-5 py-1.5 rounded-full text-[11px] sm:text-xs font-extrabold uppercase tracking-widest bg-white/20 border border-white/35 text-amber-200 shadow-lg backdrop-blur-md inline-block cursor-pointer hover:scale-105 active:scale-95 transition-all" title="Double-click Lumo or tap here to edit">
+        HANDSHAKE MISSION
+      </span>
+    </div>
+
+    <!-- ACTIVE QUICK REMINDER BADGE (IF SET) -->
+    <div id="reminder-badge-wrap" class="hidden mb-1">
+      <div class="glass-tile !rounded-full">
+        <div class="glass-filter"></div>
+        <div class="glass-overlay"></div>
+        <div class="glass-specular"></div>
+        <div class="glass-content px-4 py-1.5 flex items-center gap-2 text-xs font-bold text-amber-200">
+          <span>🔔 Note:</span>
+          <span id="reminder-badge-text" class="text-white font-semibold truncate max-w-xs">Water break at 4 PM</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. COUNTDOWN DISPLAY -->
+    <div id="countdown-wrap" class="w-full max-w-md my-1 sm:my-2">
+      <div class="glass-tile !rounded-3xl w-full">
+        <div class="glass-filter"></div>
+        <div class="glass-overlay"></div>
+        <div class="glass-specular"></div>
+        <div class="glass-content px-3.5 sm:px-5 py-3 sm:py-4">
+          <div class="grid grid-cols-4 gap-1.5 sm:gap-2 text-center items-center">
+            <div>
+              <div id="cd-days" class="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-white tabular-nums drop-shadow-sm">06</div>
+              <div class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-white/80 mt-0.5">Days</div>
+            </div>
+            <div class="border-l border-white/25">
+              <div id="cd-hours" class="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-white tabular-nums drop-shadow-sm">09</div>
+              <div class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-white/80 mt-0.5">Hours</div>
+            </div>
+            <div class="border-l border-white/25">
+              <div id="cd-mins" class="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-white tabular-nums drop-shadow-sm">18</div>
+              <div class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-white/80 mt-0.5">Mins</div>
+            </div>
+            <div class="border-l border-white/25">
+              <div id="cd-secs" class="font-display font-extrabold text-2xl sm:text-3xl md:text-4xl text-amber-200 tabular-nums drop-shadow-sm">42</div>
+              <div class="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-white/80 mt-0.5">Secs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. LUMO'S HOVERING CLOUD BUBBLE & 6. LUMO COMPANION -->
+    <div id="lumo-stage" class="relative flex flex-col items-center justify-center my-2 sm:my-4 transition-all duration-500 w-full">
+      
+      <!-- Speech Cloud Bubble pointing to Lumo -->
+      <div id="speech-cloud-wrap" onclick="handleLumoClick(event)" class="speech-cloud glass-tile !rounded-2xl max-w-sm mb-2.5 sm:mb-3 cursor-pointer transition-transform active:scale-95">
+        <div class="glass-filter"></div>
+        <div class="glass-overlay"></div>
+        <div class="glass-specular"></div>
+        <div class="glass-content px-4 py-2.5 text-center">
+          <p id="lumo-speech-text" class="text-xs sm:text-sm font-semibold text-white drop-shadow-sm leading-snug">
+            "Tap me to chat or double-click to reveal options! ✨"
+          </p>
+        </div>
+      </div>
+
+      <!-- Lumo Character Frame -->
+      <div class="relative flex items-center justify-center">
+        <div id="lumo-particles" class="absolute inset-0 pointer-events-none flex items-center justify-center z-30"></div>
+
+        <!-- Refined 3D Astral Lumo -->
+        <div id="lumo-hit-area" onclick="handleLumoClick(event)" class="lumo-float relative w-32 h-32 sm:w-40 sm:h-40 md:w-44 md:h-44 cursor-pointer flex items-center justify-center select-none" title="Tap to chat • Double-click for options">
+          <svg id="lumo-svg" viewBox="0 0 220 220" class="w-full h-full overflow-visible">
+            <defs>
+              <filter id="lumo-aura-glow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+
+              <!-- Velvety Magenta -> Sunset Coral -> Warm Gold Body Gradient -->
+              <linearGradient id="lumo-body-grad" x1="25%" y1="15%" x2="78%" y2="92%">
+                <stop id="grad-stop-1" offset="0%" stop-color="#FF00A8"/>
+                <stop id="grad-stop-2" offset="42%" stop-color="#EC008C"/>
+                <stop id="grad-stop-3" offset="76%" stop-color="#FF6B6B"/>
+                <stop id="grad-stop-4" offset="100%" stop-color="#FFE066"/>
+              </linearGradient>
+
+              <radialGradient id="lumo-inner-glow" cx="50%" cy="86%" r="52%">
+                <stop id="subsurface-stop" offset="0%" stop-color="#FDE047" stop-opacity="0.75"/>
+                <stop offset="100%" stop-color="#FDE047" stop-opacity="0"/>
+              </radialGradient>
+
+              <radialGradient id="astro-dome-grad" cx="35%" cy="28%" r="72%">
+                <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
+                <stop offset="55%" stop-color="#A5B4FC" stop-opacity="0.10"/>
+                <stop offset="88%" stop-color="#E879F9" stop-opacity="0.22"/>
+                <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.45"/>
+              </radialGradient>
+
+              <linearGradient id="star-crest-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#C084FC"/>
+                <stop offset="50%" stop-color="#FF00A8"/>
+                <stop offset="100%" stop-color="#FDE047"/>
+              </linearGradient>
+
+              <radialGradient id="lumo-floor-shadow" cx="50%" cy="50%" r="50%">
+                <stop id="shadow-stop" offset="0%" stop-color="#EC008C" stop-opacity="0.45"/>
+                <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <!-- Floor Glow Shadow -->
+            <ellipse cx="110" cy="198" rx="54" ry="10" fill="url(#lumo-floor-shadow)"/>
+
+            <g id="lumo-body-group" class="anim-drop-land">
+              <!-- Translucent Outer Glass Astro Dome -->
+              <circle cx="110" cy="108" r="84" fill="url(#astro-dome-grad)" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/>
+
+              <!-- Main Lumo Silhouette Contour -->
+              <path id="lumo-blob-shape"
+                filter="url(#lumo-aura-glow)"
+                d="M110,42 C151,42 177,70 177,111 C177,152 149,176 110,176 C71,176 43,152 43,111 C43,70 69,42 110,42 Z"
+                fill="url(#lumo-body-grad)">
+                <animate attributeName="d" dur="6.5s" repeatCount="indefinite"
+                  values="
+                    M110,42 C151,42 177,70 177,111 C177,152 149,176 110,176 C71,176 43,152 43,111 C43,70 69,42 110,42 Z;
+                    M110,44 C153,41 175,73 176,112 C177,150 148,178 110,175 C72,178 43,150 44,112 C45,73 67,41 110,44 Z;
+                    M110,41 C149,43 179,69 176,109 C173,153 151,175 110,177 C69,175 47,153 44,109 C41,69 71,43 110,41 Z;
+                    M110,42 C151,42 177,70 177,111 C177,152 149,176 110,176 C71,176 43,152 43,111 C43,70 69,42 110,42 Z
+                  "/>
+              </path>
+
+              <!-- Subsurface Lower Glow -->
+              <ellipse cx="110" cy="144" rx="52" ry="28" fill="url(#lumo-inner-glow)"/>
+              <path d="M 46,144 Q 110,168 174,144" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2.5" stroke-linecap="round"/>
+
+              <!-- Cheeks -->
+              <ellipse id="cheek-left" cx="73" cy="121" rx="10" ry="5" fill="#FFE066" opacity="0.55"/>
+              <ellipse id="cheek-right" cx="147" cy="121" rx="10" ry="5" fill="#FFE066" opacity="0.55"/>
+
+              <!-- Eyes Expressions -->
+              <g id="lumo-eyes-open">
+                <g id="eye-left-group">
+                  <ellipse id="eye-left-base" cx="86" cy="106" rx="11" ry="13" fill="#0F172A"/>
+                  <circle id="pupil-left" cx="88" cy="102" r="4.3" fill="#FFFFFF"/>
+                  <circle cx="82" cy="110" r="1.9" fill="#FFFFFF" opacity="0.85"/>
+                </g>
+                <g id="eye-right-group">
+                  <ellipse id="eye-right-base" cx="134" cy="106" rx="11" ry="13" fill="#0F172A"/>
+                  <circle id="pupil-right" cx="136" cy="102" r="4.3" fill="#FFFFFF"/>
+                  <circle cx="130" cy="110" r="1.9" fill="#FFFFFF" opacity="0.85"/>
+                </g>
+              </g>
+
+              <g id="lumo-eyes-happy" class="hidden">
+                <path d="M 75,108 Q 86,95 97,108" fill="none" stroke="#0F172A" stroke-width="3.8" stroke-linecap="round"/>
+                <path d="M 123,108 Q 134,95 145,108" fill="none" stroke="#0F172A" stroke-width="3.8" stroke-linecap="round"/>
+              </g>
+
+              <g id="lumo-eyes-sleepy" class="hidden">
+                <path d="M 75,105 Q 86,115 97,105" fill="none" stroke="#0F172A" stroke-width="3.5" stroke-linecap="round"/>
+                <path d="M 123,105 Q 134,115 145,105" fill="none" stroke="#0F172A" stroke-width="3.5" stroke-linecap="round"/>
+              </g>
+
+              <g id="lumo-eyes-love" class="hidden">
+                <path d="M86,115 C86,115 74,107 74,100 C74,96 78,94 82,96 C84,97 86,99 86,99 C86,99 88,97 90,96 C94,94 98,96 98,100 C98,107 86,115 86,115 Z" fill="#FFF1F2"/>
+                <path d="M134,115 C134,115 122,107 122,100 C122,96 126,94 130,96 C132,97 134,99 134,99 C134,99 136,97 138,96 C146,94 146,96 146,100 C146,107 134,115 134,115 Z" fill="#FFF1F2"/>
+              </g>
+
+              <!-- Accessories Overlays -->
+              <g id="lumo-brows-worried" class="hidden">
+                <path d="M 74,91 L 95,86" fill="none" stroke="#0F172A" stroke-width="3.2" stroke-linecap="round"/>
+                <path d="M 146,91 L 125,86" fill="none" stroke="#0F172A" stroke-width="3.2" stroke-linecap="round"/>
+              </g>
+
+              <g id="lumo-glasses" class="hidden">
+                <circle cx="86" cy="106" r="17" fill="rgba(255,255,255,0.25)" stroke="#0F172A" stroke-width="2.8"/>
+                <circle cx="134" cy="106" r="17" fill="rgba(255,255,255,0.25)" stroke="#0F172A" stroke-width="2.8"/>
+                <path d="M 103,106 Q 110,103 117,106" fill="none" stroke="#0F172A" stroke-width="2.8" stroke-linecap="round"/>
+              </g>
+
+              <path id="lumo-sweat" class="hidden" d="M 164,72 C 164,72 172,83 172,88 A 7.5,7.5 0 1 1 156,88 C 156,83 164,72 164,72 Z" fill="#BAE6FD" stroke="#FFFFFF" stroke-width="1.5"/>
+
+              <g id="lumo-zzz" class="hidden" fill="#FDE047" font-family="Plus Jakarta Sans, sans-serif" font-weight="800">
+                <text x="158" y="76" font-size="14">z</text>
+                <text x="169" y="63" font-size="17">Z</text>
+              </g>
+
+              <!-- Mouth -->
+              <path id="lumo-mouth" d="M 101,122 Q 110,130 119,122" fill="none" stroke="#0F172A" stroke-width="3.4" stroke-linecap="round"/>
+              <ellipse id="lumo-mouth-open" class="hidden" cx="110" cy="125" rx="6.5" ry="5.5" fill="#0F172A"/>
+
+              <!-- 4-Point Cosmic Star Crest -->
+              <g class="lumo-star-crest">
+                <path d="M 110,8 Q 113,20 124,22 Q 113,24 110,36 Q 107,24 96,22 Q 107,20 110,8 Z" fill="url(#star-crest-grad)" stroke="rgba(255,255,255,0.8)" stroke-width="1"/>
+                <circle cx="110" cy="22" r="3" fill="#FEF08A"/>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- CONSOLIDATED 4-BUTTON MENU (POPS OUT ON DOUBLE-CLICK ONLY) -->
+      <div id="radial-actions" class="hidden opacity-0 pointer-events-none scale-95 flex-wrap items-center justify-center gap-2 sm:gap-2.5 mt-3 transition-all duration-300">
+        <!-- 1. ROADMAP (Milestones & Checklist) -->
+        <button onclick="togglePanel('roadmap')" class="glass-tile !rounded-full active:scale-95 transition-transform" title="Roadmap & Goal Settings">
+          <div class="glass-filter"></div>
+          <div class="glass-overlay"></div>
+          <div class="glass-specular"></div>
+          <div class="glass-content px-4 py-2 flex items-center gap-1.5 text-xs font-bold text-white">
+            <span>📋</span> Roadmap
+          </div>
+        </button>
+
+        <!-- 2. 15M FOCUS SPRINT -->
+        <button onclick="togglePanel('focus')" class="glass-tile !rounded-full active:scale-95 transition-transform" title="15-Minute Focus Sprint">
+          <div class="glass-filter"></div>
+          <div class="glass-overlay"></div>
+          <div class="glass-specular"></div>
+          <div class="glass-content px-4 py-2 flex items-center gap-1.5 text-xs font-bold text-white">
+            <span>⏱️</span> <span id="focus-btn-label">15m Focus</span>
+          </div>
+        </button>
+
+        <!-- 3. QUICK REMINDER -->
+        <button onclick="togglePanel('reminder')" class="glass-tile !rounded-full active:scale-95 transition-transform" title="Quick Lock Screen Reminder">
+          <div class="glass-filter"></div>
+          <div class="glass-overlay"></div>
+          <div class="glass-specular"></div>
+          <div class="glass-content px-4 py-2 flex items-center gap-1.5 text-xs font-bold text-white">
+            <span>🔔</span> Quick Reminder
+          </div>
+        </button>
+
+        <!-- 4. CUSTOMISE (GLASS EFFECT, WALLPAPERS, COLORS, ROADMAP CREATOR) -->
+        <button onclick="togglePanel('customise')" class="glass-tile !rounded-full active:scale-95 transition-transform" title="Customise Wallpapers, Colors & Glass Effect">
+          <div class="glass-filter"></div>
+          <div class="glass-overlay"></div>
+          <div class="glass-specular"></div>
+          <div class="glass-content px-4 py-2 flex items-center gap-1.5 text-xs font-bold text-white">
+            <span>✨</span> Customise
+          </div>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- EXPANDABLE ACTION PANELS                                              -->
+    <!-- ===================================================================== -->
+    <div id="active-panel-container" class="w-full max-w-lg mt-1 mb-3 transition-all duration-500 hidden">
+      
+      <!-- PANEL 1: ROADMAP CHECKLIST -->
+      <div id="panel-roadmap" class="glass-tile !rounded-3xl w-full hidden">
+        <div class="glass-filter"></div>
+        <div class="glass-overlay"></div>
+        <div class="glass-specular"></div>
+        <div class="glass-content p-4 sm:p-5">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-white">T-Minus Roadmap</span>
+            <span id="roadmap-progress-badge" class="text-xs font-bold text-amber-200">1 / 4 Done</span>
+          </div>
+
+          <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden mb-3">
+            <div id="roadmap-progress-bar" class="h-full bg-gradient-to-r from-amber-300 via-pink-400 to-cyan-300 rounded-full transition-all duration-500" style="width: 25%;"></div>
+          </div>
+
+          <div id="roadmap-list" class="space-y-2 max-h-48 overflow-y-auto clean-scroll pr-1">
+            <!-- Rendered via JS -->
+          </div>
+
+          <div class="mt-3 pt-3 border-t border-white/20 flex items-center justify-between gap-2">
+            <button onclick="autoGenerateTMinus()" class="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 border border-white/25 text-[11px] font-bold text-amber-200 transition-all">
+              ✨ Auto-Plan
+            </button>
+            <button onclick="downloadICSReminders()" class="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 border border-white/25 text-[11px] font-bold text-white transition-all">
+              📅 Export .ICS
+            </button>
+            <button onclick="closeActivePanel()" class="text-xs font-bold text-white/70 hover:text-white px-2 py-1">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL 2: FOCUS SPRINT TIMER -->
+      <div id="panel-focus" class="glass-tile !rounded-3xl w-full hidden">
+        <div class="glass-filter"></div>
+        <div class="glass-overlay"></div>
+        <div class="glass-specular"></div>
+        <div class="glass-content p-5 text-center space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold uppercase tracking-widest text-amber-200">⏱️ Focus Sprint</span>
+            <button onclick="closeActivePanel()" class="text-xs font-bold text-white/70 hover:text-white">Close</button>
+          </div>
+
+          <div id="focus-timer-display" class="font-display font-extrabold text-5xl sm:text-6xl text-white tabular-nums tracking-tight py-1">
+            15:00
+          </div>
+
+          <div class="flex flex-wrap items-center justify-center gap-1.5">
+            <button onclick="setFocusPreset(15)" class="px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 border border-white/25 text-xs font-bold">15m</button>
+            <button onclick="setFocusPreset(25)" class="px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 border border-white/25 text-xs font-bold">25m</button>
+            <button onclick="setFocusPreset(45)" class="px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 border border-white/25 text-xs font-bold">45m</button>
+            <button onclick="setFocusPreset(60)" class="px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 border border-white/25 text-xs font-bold">60m</button>
+            <input type="number" min="1" max="180" placeholder="Custom" onchange="setCustomFocusMins(this.value)" class="w-20 rounded-full bg-white/15 border border-white/25 px-3 py-1 text-xs font-bold text-center text-white placeholder-white/50 focus:outline-none">
+          </div>
+
+          <button id="focus-start-btn" onclick="toggleFocusSprint()" class="w-full py-2.5 rounded-full bg-amber-300 hover:bg-amber-200 text-slate-950 font-extrabold text-xs transition-all">
+            Start Sprint
+          </button>
+        </div>
+      </div>
+
+      <!-- PANEL 3: QUICK REMINDER & AUTOMATIC DAILY REMINDERS -->
+      <div id="panel-reminder" class="glass-tile !rounded-3xl w-full hidden">
+        <div class="glass-filter"></div>
+        <div class="glass-overlay"></div>
+        <div class="glass-specular"></div>
+        <div class="glass-content p-5 space-y-4">
+          
+          <div>
+            <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200 mb-2">🔔 Quick Lock Screen Note</h3>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label class="block text-[9px] font-bold uppercase tracking-wider text-white/80 mb-0.5">Date (Month/Day/Year)</label>
+                <input id="reminder-date" type="date" class="w-full rounded-xl bg-white/15 border border-white/30 px-3 py-1.5 text-xs font-bold text-white focus:outline-none [color-scheme:dark]">
+              </div>
+              <div>
+                <label class="block text-[9px] font-bold uppercase tracking-wider text-white/80 mb-0.5">Time</label>
+                <input id="reminder-time" type="time" class="w-full rounded-xl bg-white/15 border border-white/30 px-3 py-1.5 text-xs font-bold text-white focus:outline-none [color-scheme:dark]">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[9px] font-bold uppercase tracking-wider text-white/80 mb-0.5">Reminder Note</label>
+              <input id="inp-quick-reminder" type="text" placeholder="e.g. Water break & review Figma mockups" class="w-full rounded-xl bg-white/15 border border-white/30 px-3.5 py-2 text-xs font-semibold text-white placeholder-white/50 focus:outline-none">
+            </div>
+          </div>
+
+          <!-- Automatic Daily Reminders Section -->
+          <div class="pt-3 border-t border-white/20">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200">☀️ Automatic Daily Nudge</h3>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="chk-daily-reminder" type="checkbox" onchange="toggleDailyReminders(this.checked)" class="sr-only peer" checked>
+                <div class="w-9 h-5 bg-white/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-300"></div>
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label class="block text-[9px] font-bold uppercase tracking-wider text-white/80 mb-0.5">Check-in Time</label>
+                <input id="inp-daily-time" type="time" onchange="updateDailySettings()" class="w-full rounded-xl bg-white/15 border border-white/30 px-3 py-1 text-xs font-bold text-white focus:outline-none [color-scheme:dark]">
+              </div>
+              <div class="flex items-end">
+                <button onclick="testDailyNudgePreview()" class="w-full py-1.5 rounded-xl bg-white/15 hover:bg-white/25 border border-white/30 text-[10px] font-extrabold text-amber-200 transition-all">
+                  ⚡ Test Daily Nudge
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[9px] font-bold uppercase tracking-wider text-white/80 mb-0.5">Daily Nudge Message</label>
+              <input id="inp-daily-msg" type="text" oninput="updateDailySettings()" placeholder="Time for a quick progress check! You've got this ✨" class="w-full rounded-xl bg-white/15 border border-white/30 px-3 py-1.5 text-xs font-semibold text-white placeholder-white/50 focus:outline-none">
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center pt-1">
+            <button onclick="saveQuickReminder()" class="px-5 py-2 rounded-full bg-amber-300 hover:bg-amber-200 text-slate-950 font-extrabold text-xs transition-all">
+              Save Note & Nudge
+            </button>
+            <button onclick="closeActivePanel()" class="text-xs font-bold text-white/70 hover:text-white px-3 py-1">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL 4: CUSTOMISE (LAYOUTS, GLASS EFFECT, WALLPAPERS, COLORS, ROADMAP CREATOR) -->
+      <div id="panel-customise" class="glass-tile !rounded-3xl w-full hidden">
+        <div class="glass-filter"></div>
+        <div class="glass-overlay"></div>
+        <div class="glass-specular"></div>
+        <div class="glass-content p-4 sm:p-5 space-y-4 max-h-[75vh] overflow-y-auto clean-scroll">
+          
+          <!-- Section 0: Lock Screen Layout Customisation -->
+          <div>
+            <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200 mb-2">📐 Lock Screen Layouts</h3>
+            <div class="grid grid-cols-5 gap-1.5">
+              <button onclick="setLayoutMode('layout-classic')" data-layout="layout-classic" class="layout-btn flex flex-col items-center p-2 rounded-xl border border-white/30 bg-white/10 hover:bg-white/25 transition-all text-center">
+                <span class="text-base mb-1">🎯</span>
+                <span class="text-[9px] font-extrabold truncate">Classic</span>
+              </button>
+              <button onclick="setLayoutMode('layout-minimal')" data-layout="layout-minimal" class="layout-btn flex flex-col items-center p-2 rounded-xl border border-white/30 bg-white/10 hover:bg-white/25 transition-all text-center">
+                <span class="text-base mb-1">📰</span>
+                <span class="text-[9px] font-extrabold truncate">Minimal</span>
+              </button>
+              <button onclick="setLayoutMode('layout-split')" data-layout="layout-split" class="layout-btn flex flex-col items-center p-2 rounded-xl border border-white/30 bg-white/10 hover:bg-white/25 transition-all text-center">
+                <span class="text-base mb-1">🌅</span>
+                <span class="text-[9px] font-extrabold truncate">Split</span>
+              </button>
+              <button onclick="setLayoutMode('layout-capsule')" data-layout="layout-capsule" class="layout-btn flex flex-col items-center p-2 rounded-xl border border-white/30 bg-white/10 hover:bg-white/25 transition-all text-center">
+                <span class="text-base mb-1">💊</span>
+                <span class="text-[9px] font-extrabold truncate">Capsule</span>
+              </button>
+              <button onclick="setLayoutMode('layout-zen')" data-layout="layout-zen" class="layout-btn flex flex-col items-center p-2 rounded-xl border border-white/30 bg-white/10 hover:bg-white/25 transition-all text-center">
+                <span class="text-base mb-1">🧘</span>
+                <span class="text-[9px] font-extrabold truncate">Zen</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Section 1: Glass Effect (Opacity Only) -->
+          <div class="pt-2 border-t border-white/20">
+            <div class="flex items-center justify-between mb-1.5">
+              <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200">🪟 Glass Effect</h3>
+              <span id="lbl-glass-opacity" class="text-xs font-extrabold text-white tabular-nums">18%</span>
+            </div>
+            <input id="slider-opacity" type="range" min="0" max="60" value="18" oninput="updateGlassStyle()" class="w-full">
+          </div>
+
+          <!-- Section 2: Text & Box Colors -->
+          <div class="pt-2 border-t border-white/20">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200">🎨 Text & Box Colors</h3>
+              <button onclick="resetColors()" class="text-[10px] font-bold text-white/70 hover:text-white underline">Reset Colors</button>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-[10px] font-bold">
+              <div>
+                <label class="block mb-1">Primary Text</label>
+                <input id="color-primary-text" type="color" value="#ffffff" onchange="updateColors()" class="w-full h-8 rounded-lg bg-transparent cursor-pointer">
+              </div>
+              <div>
+                <label class="block mb-1">Accent Highlight</label>
+                <input id="color-accent" type="color" value="#fde047" onchange="updateColors()" class="w-full h-8 rounded-lg bg-transparent cursor-pointer">
+              </div>
+              <div>
+                <label class="block mb-1">Glass Box Tint</label>
+                <input id="color-box-tint" type="color" value="#ffffff" onchange="updateColors()" class="w-full h-8 rounded-lg bg-transparent cursor-pointer">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Live Animated Wallpapers -->
+          <div class="pt-2 border-t border-white/20">
+            <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200 mb-2">✨ Live Animated Wallpapers</h3>
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              <button onclick="setWallpaperMode('live-aurora')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <span class="w-full h-10 rounded-lg bg-gradient-to-tr from-fuchsia-600 via-purple-600 to-amber-400 mb-1"></span>
+                <span class="text-[10px] font-bold truncate">Aurora</span>
+              </button>
+              <button onclick="setWallpaperMode('live-cosmic')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <span class="w-full h-10 rounded-lg bg-gradient-to-tr from-cyan-600 via-blue-900 to-indigo-950 mb-1"></span>
+                <span class="text-[10px] font-bold truncate">Cosmic</span>
+              </button>
+              <button onclick="setWallpaperMode('live-prism')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <span class="w-full h-10 rounded-lg bg-gradient-to-tr from-rose-500 via-indigo-600 to-teal-400 mb-1"></span>
+                <span class="text-[10px] font-bold truncate">Prism</span>
+              </button>
+              <button onclick="setWallpaperMode('live-embers')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <span class="w-full h-10 rounded-lg bg-gradient-to-tr from-orange-600 via-red-900 to-amber-500 mb-1"></span>
+                <span class="text-[10px] font-bold truncate">Embers</span>
+              </button>
+              <button onclick="setWallpaperMode('live-ocean')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <span class="w-full h-10 rounded-lg bg-gradient-to-tr from-teal-500 via-emerald-800 to-blue-900 mb-1"></span>
+                <span class="text-[10px] font-bold truncate">Ocean</span>
+              </button>
+              <button onclick="setWallpaperMode('live-velvet')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <span class="w-full h-10 rounded-lg bg-gradient-to-tr from-purple-900 via-pink-800 to-slate-950 mb-1"></span>
+                <span class="text-[10px] font-bold truncate">Velvet</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Section 4: Normal Wallpapers & Photo Upload -->
+          <div class="pt-2 border-t border-white/20">
+            <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200 mb-2">🖼️ Normal Wallpapers</h3>
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+              <button onclick="setStaticWallpaper('obsidian-dark')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <span class="w-full h-10 rounded-lg bg-slate-950 border border-white/20 mb-1"></span>
+                <span class="text-[10px] font-bold truncate">Obsidian</span>
+              </button>
+              <button onclick="setStaticWallpaper('midnight-peaks')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=200&q=70" class="w-full h-10 rounded-lg object-cover mb-1" alt="Peaks" />
+                <span class="text-[10px] font-bold truncate">Peaks</span>
+              </button>
+              <button onclick="setStaticWallpaper('sunlit-clouds')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <img src="https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?auto=format&fit=crop&w=200&q=70" class="w-full h-10 rounded-lg object-cover mb-1" alt="Sky" />
+                <span class="text-[10px] font-bold truncate">Sunlit Sky</span>
+              </button>
+              <button onclick="setStaticWallpaper('serene-mist')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <img src="https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=200&q=70" class="w-full h-10 rounded-lg object-cover mb-1" alt="Mist" />
+                <span class="text-[10px] font-bold truncate">Mist</span>
+              </button>
+              <button onclick="setStaticWallpaper('cyber-dusk')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <img src="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=200&q=70" class="w-full h-10 rounded-lg object-cover mb-1" alt="Dusk" />
+                <span class="text-[10px] font-bold truncate">Dusk</span>
+              </button>
+              <button onclick="setStaticWallpaper('pastel-horizon')" class="flex flex-col items-center p-1.5 rounded-xl border border-white/30 bg-white/10 hover:bg-white/20 transition-all">
+                <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=200&q=70" class="w-full h-10 rounded-lg object-cover mb-1" alt="Horizon" />
+                <span class="text-[10px] font-bold truncate">Horizon</span>
+              </button>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <label class="flex-1 px-4 py-2 rounded-full border border-white/30 bg-white/10 hover:bg-white/20 text-xs font-bold text-center cursor-pointer transition-all">
+                <span>📁 Upload Own Wallpaper</span>
+                <input type="file" accept="image/*" onchange="handleCustomWallpaperUpload(event)" class="hidden">
+              </label>
+              <button onclick="exportWallpaperPNG()" class="flex-1 px-4 py-2 rounded-full bg-white text-slate-950 font-extrabold text-xs hover:bg-slate-100 transition-all">
+                💾 Save Wallpaper PNG
+              </button>
+            </div>
+          </div>
+
+          <!-- Section 5: Goal & Roadmap Creator -->
+          <div class="pt-2 border-t border-white/20 space-y-2.5">
+            <h3 class="text-xs font-extrabold uppercase tracking-widest text-amber-200">📝 Create & Edit Roadmap</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[9px] font-bold uppercase tracking-wider text-white/80 mb-0.5">Goal Title</label>
+                <input id="inp-goal-title" type="text" oninput="syncGoalDetails()" placeholder="HANDSHAKE MISSION" class="w-full rounded-xl bg-white/15 border border-white/30 px-3 py-1.5 text-xs font-bold text-white focus:outline-none">
+              </div>
+              <div>
+                <label class="block text-[9px] font-bold uppercase tracking-wider text-white/80 mb-0.5">Target Deadline</label>
+                <input id="inp-deadline" type="datetime-local" onchange="syncGoalDetails()" class="w-full rounded-xl bg-white/15 border border-white/30 px-3 py-1.5 text-xs font-bold text-white focus:outline-none [color-scheme:dark]">
+              </div>
+            </div>
+
+            <!-- Add new milestone inline -->
+            <div class="flex gap-1.5 pt-1">
+              <input id="new-milestone-tag" type="text" placeholder="Tag (e.g. T-3)" class="w-20 rounded-xl bg-white/15 border border-white/30 px-2.5 py-1 text-xs font-bold text-white focus:outline-none">
+              <input id="new-milestone-text" type="text" placeholder="Milestone task..." class="flex-1 rounded-xl bg-white/15 border border-white/30 px-3 py-1 text-xs font-semibold text-white focus:outline-none">
+              <button onclick="addCustomMilestone()" class="px-3 py-1 rounded-xl bg-amber-300 text-slate-950 font-extrabold text-xs">Add</button>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button onclick="closeActivePanel()" class="text-xs font-bold text-white/70 hover:text-white px-3 py-1">Close</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- CLEAN BOTTOM MARGIN SAFE AREA -->
+    <div class="w-full py-1 sm:py-2 flex justify-center opacity-30">
+      <div class="w-28 h-1 bg-white rounded-full"></div>
+    </div>
+  </main>
+
+  <!-- OFFSCREEN CANVAS FOR HIGH-RES PNG EXPORT -->
+  <canvas id="wallpaper-export-canvas" class="hidden"></canvas>
+
+  <!-- FLOATING TOAST -->
+  <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-50 opacity-0 pointer-events-none -translate-y-3 transition-all duration-300">
+    <div class="glass-tile !rounded-full">
+      <div class="glass-filter"></div>
+      <div class="glass-overlay"></div>
+      <div class="glass-specular"></div>
+      <div class="glass-content px-5 py-2 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(253,224,71,0.9)]"></span>
+        <span id="toast-msg" class="text-xs font-bold text-white">Saved!</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- JAVASCRIPT ENGINE                                                     -->
+  <!-- ===================================================================== -->
+  <script>
+    function getFutureISO(daysAhead = 6) {
+      const d = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    const STATIC_WALLPAPERS = {
+      "obsidian-dark": "",
+      "midnight-peaks": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1400&q=80",
+      "sunlit-clouds": "https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?auto=format&fit=crop&w=1400&q=80",
+      "serene-mist": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1400&q=80",
+      "cyber-dusk": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1400&q=80",
+      "pastel-horizon": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1400&q=80"
+    };
+
+    const TAP_MESSAGES = [
+      { emo: "happy", anim: "bounce", text: "Hey there! Ready to crush your next milestone?", particles: ["✨", "💛"] },
+      { emo: "excited", anim: "dance", text: "Every small step forward builds huge momentum!", particles: ["⚡", "🔥"] },
+      { emo: "love", anim: "sway", text: "You're doing great—keep that focus flowing!", particles: ["💖", "🌸"] },
+      { emo: "focused", anim: "nod-puff", text: "Eyes on the horizon. We've got plenty of time!", particles: ["🎯", "💡"] },
+      { emo: "hyped", anim: "squish", text: "Boop! Lumo is wide awake and cheering for you!", particles: ["🌟", "🎉"] },
+      { emo: "calm", anim: "morph", text: "Take a deep breath—steady progress wins every time.", particles: ["🌿", "☁️"] }
+    ];
+
+    const DEFAULT_STATE = {
+      title: "HANDSHAKE MISSION",
+      deadline: getFutureISO(6),
+      glassOpacity: 18,
+      layoutMode: "layout-classic",
+      dailyRemindersEnabled: true,
+      dailyReminderTime: "09:00",
+      dailyReminderMsg: "Time for a quick progress check! You're doing amazing ✨",
+      lastDailyNudgeDate: "",
+      primaryTextColor: "#ffffff",
+      accentColor: "#fde047",
+      boxTint: "#ffffff",
+      wallpaperMode: "live-aurora",
+      customWallpaperDataUrl: null,
+      quickReminder: "",
+      quickReminderDate: "",
+      quickReminderTime: "",
+      milestones: [
+        { tag: "T-6", text: "Curate top 3 case studies", done: true },
+        { tag: "T-4", text: "Refine hero motion & micro-copy", done: false },
+        { tag: "T-2", text: "Test mobile & desktop layouts", done: false },
+        { tag: "T-1", text: "Final submission link check", done: false }
+      ]
+    };
+
+    const EMOTIONS = {
+      calm: { stops: ["#FF00A8", "#EC008C", "#FF6B6B", "#FFE066"], subsurface: "#FDE047", eyes: "open", mouth: "smile" },
+      happy: { stops: ["#F43F5E", "#EC4899", "#FB923C", "#FEF08A"], subsurface: "#FDE047", eyes: "happy", mouth: "smile" },
+      excited: { stops: ["#D946EF", "#FF00A8", "#F59E0B", "#FEF08A"], subsurface: "#FACC15", eyes: "happy", mouth: "open" },
+      focused: { stops: ["#A855F7", "#6366F1", "#EC4899", "#FDE047"], subsurface: "#C084FC", eyes: "open", glasses: true, mouth: "flat" },
+      hyped: { stops: ["#FF00A8", "#9333EA", "#F43F5E", "#FDE047"], subsurface: "#F472B6", eyes: "open", mouth: "open" },
+      sleepy: { stops: ["#9333EA", "#6366F1", "#A855F7", "#FDE047"], subsurface: "#A5B4FC", eyes: "sleepy", zzz: true, mouth: "small" },
+      worried: { stops: ["#E11D48", "#F43F5E", "#FB7185", "#FDBA74"], subsurface: "#FB7185", eyes: "open", worried: true, sweat: true, mouth: "wavy" },
+      sad: { stops: ["#64748B", "#475569", "#94A3B8", "#CBD5E1"], subsurface: "#94A3B8", eyes: "sleepy", worried: true, mouth: "wavy" },
+      love: { stops: ["#FF00A8", "#F43F5E", "#FB7185", "#FEF08A"], subsurface: "#F472B6", eyes: "love", mouth: "smile" }
+    };
+
+    let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    let currentEmotion = "calm";
+    let activePanelKey = null;
+    let menuVisible = false;
+    let focusSprintActive = false;
+    let focusSecondsRemaining = 15 * 60;
+    let focusInterval = null;
+    let msgIndex = 0;
+    let clickTimer = null;
+    let clickCount = 0;
+
+    // Live Wallpaper Canvases
+    let canvases = {};
+    let animFrameId = 0;
+
+    window.onload = function () {
+      const saved = localStorage.getItem("lumo_standalone_v8");
+      if (saved) {
+        try { state = { ...state, ...JSON.parse(saved) }; } catch (e) {}
+      }
+
+      initLiveWallpaperCanvases();
+      updateGlassStyle();
+      applyColorsToDOM();
+      applyWallpaperUI();
+      applyLayoutMode(state.layoutMode || "layout-classic");
+      renderAll(true);
+      updateClocks();
+
+      setInterval(updateClocks, 1000);
+      setInterval(checkDailyReminders, 30000);
+      setInterval(triggerNaturalBlink, 4200);
+      setInterval(autonomousIdleShift, 12000);
+
+      document.addEventListener("mousemove", trackPupils);
+      document.addEventListener("touchmove", (e) => {
+        if (e.touches && e.touches[0]) trackPupils(e.touches[0]);
+      }, { passive: true });
+    };
+
+    // -----------------------------------------------------------------------
+    // LAYOUT CUSTOMISATION & AUTOMATIC DAILY REMINDERS
+    // -----------------------------------------------------------------------
+    function setLayoutMode(mode) {
+      state.layoutMode = mode;
+      saveState();
+      applyLayoutMode(mode);
+      const name = mode.replace("layout-", "").toUpperCase();
+      showToast(`Layout: ${name}`);
+    }
+
+    function applyLayoutMode(mode) {
+      const main = document.querySelector("main");
+      if (!main) return;
+      main.classList.remove("layout-classic", "layout-minimal", "layout-split", "layout-capsule", "layout-zen");
+      main.classList.add(mode || "layout-classic");
+
+      document.querySelectorAll(".layout-btn").forEach(btn => {
+        const active = btn.dataset.layout === mode;
+        btn.classList.toggle("ring-2", active);
+        btn.classList.toggle("ring-amber-300", active);
+        btn.classList.toggle("bg-white/30", active);
+      });
+    }
+
+    function toggleDailyReminders(enabled) {
+      state.dailyRemindersEnabled = enabled;
+      saveState();
+      showToast(enabled ? "Daily reminders ON" : "Daily reminders OFF");
+    }
+
+    function updateDailySettings() {
+      state.dailyReminderTime = document.getElementById("inp-daily-time").value || "09:00";
+      state.dailyReminderMsg = document.getElementById("inp-daily-msg").value || "Time for a quick progress check! You've got this ✨";
+      saveState();
+    }
+
+    function checkDailyReminders() {
+      if (!state.dailyRemindersEnabled) return;
+      const now = new Date();
+      const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const today = now.toISOString().slice(0, 10);
+
+      if (current === (state.dailyReminderTime || "09:00") && state.lastDailyNudgeDate !== today) {
+        state.lastDailyNudgeDate = today;
+        saveState();
+        triggerDailyNudge();
+      }
+    }
+
+    function testDailyNudgePreview() {
+      triggerDailyNudge();
+      showToast("Triggered Daily Nudge!");
+    }
+
+    function triggerDailyNudge() {
+      const msg = state.dailyReminderMsg || "Time for a quick progress check! You're doing amazing ✨";
+      const hour = new Date().getHours();
+      let emo = "happy";
+      let anim = "bounce";
+
+      if (hour < 12) { emo = "excited"; anim = "dance"; }
+      else if (hour < 18) { emo = "focused"; anim = "nod-puff"; }
+      else { emo = "calm"; anim = "sway"; }
+
+      playLumoAnimation(anim);
+      expressLumo(emo, `☀️ Daily Nudge: ${msg}`, ["☀️", "✨", "🔔"]);
+    }
+
+    function renderAll(autoEmotion = false) {
+      document.getElementById("lock-goal-title").textContent = (state.title || "HANDSHAKE MISSION").toUpperCase();
+      document.getElementById("inp-goal-title").value = state.title;
+      document.getElementById("inp-deadline").value = state.deadline;
+      document.getElementById("inp-quick-reminder").value = state.quickReminder || "";
+      document.getElementById("reminder-date").value = state.quickReminderDate || "";
+      document.getElementById("reminder-time").value = state.quickReminderTime || "";
+
+      document.getElementById("chk-daily-reminder").checked = state.dailyRemindersEnabled !== false;
+      document.getElementById("inp-daily-time").value = state.dailyReminderTime || "09:00";
+      document.getElementById("inp-daily-msg").value = state.dailyReminderMsg || "";
+
+      const badgeWrap = document.getElementById("reminder-badge-wrap");
+      if (state.quickReminder) {
+        badgeWrap.classList.remove("hidden");
+        document.getElementById("reminder-badge-text").textContent = state.quickReminder;
+      } else {
+        badgeWrap.classList.add("hidden");
+      }
+
+      const listEl = document.getElementById("roadmap-list");
+      listEl.innerHTML = "";
+
+      const total = state.milestones.length;
+      const completed = state.milestones.filter(m => m.done).length;
+      const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+      document.getElementById("roadmap-progress-badge").textContent = `${completed} / ${total} Done`;
+      document.getElementById("roadmap-progress-bar").style.width = `${pct}%`;
+
+      state.milestones.forEach((m, idx) => {
+        const row = document.createElement("div");
+        row.className = `w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl transition-all ${
+          m.done ? "bg-white/10 text-white/70" : "bg-white/20 hover:bg-white/30 text-white font-semibold"
+        }`;
+        row.innerHTML = `
+          <div onclick="toggleMilestone(${idx})" class="flex items-center gap-2.5 flex-1 cursor-pointer truncate">
+            <span class="w-4 h-4 rounded flex items-center justify-center shrink-0 ${m.done ? "bg-amber-300 text-slate-950 font-bold" : "border border-white/50 bg-white/10"}">
+              ${m.done ? "✓" : ""}
+            </span>
+            <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-white/20 text-amber-200 shrink-0">${escapeHTML(m.tag)}</span>
+            <span class="text-xs truncate ${m.done ? "line-through" : ""}">${escapeHTML(m.text)}</span>
+          </div>
+          <button onclick="deleteMilestone(${idx})" class="text-xs text-white/50 hover:text-white px-1.5 py-0.5">✕</button>
+        `;
+        listEl.appendChild(row);
+      });
+
+      if (autoEmotion) syncAutoEmotion();
+    }
+
+    function toggleMilestone(idx) {
+      state.milestones[idx].done = !state.milestones[idx].done;
+      saveState();
+      renderAll(false);
+
+      const tag = state.milestones[idx].tag;
+      const remaining = state.milestones.filter(m => !m.done).length;
+
+      if (state.milestones[idx].done) {
+        if (remaining === 0) {
+          playLumoAnimation("dance");
+          expressLumo("love", "All milestones complete! You mastered your goal 🥰🎉", ["💖", "🎉", "✨"]);
+        } else {
+          playLumoAnimation("bounce");
+          expressLumo("excited", `Awesome! ${tag} checked off! ${remaining} left 🤩🚀`, ["🤩", "🚀", "✨"]);
+        }
+      } else {
+        playLumoAnimation("sad-droop");
+        expressLumo("sad", `Re-opened ${tag}! We can conquer it 😅💦`, ["😅", "💦"]);
+      }
+    }
+
+    function addCustomMilestone() {
+      const tag = document.getElementById("new-milestone-tag").value.trim() || `T-${state.milestones.length + 1}`;
+      const text = document.getElementById("new-milestone-text").value.trim();
+      if (!text) return;
+
+      state.milestones.push({ tag, text, done: false });
+      document.getElementById("new-milestone-tag").value = "";
+      document.getElementById("new-milestone-text").value = "";
+      saveState();
+      renderAll(true);
+      playLumoAnimation("pop");
+      showToast("Milestone added!");
+    }
+
+    function deleteMilestone(idx) {
+      state.milestones.splice(idx, 1);
+      saveState();
+      renderAll(true);
+      showToast("Milestone deleted");
+    }
+
+    function getDaysRemaining() {
+      const target = new Date(state.deadline).getTime();
+      return Math.max(0, (target - Date.now()) / (1000 * 60 * 60 * 24));
+    }
+
+    function syncAutoEmotion() {
+      if (focusSprintActive) { applyEmotionVisuals("focused"); return; }
+      const hour = new Date().getHours();
+      const daysLeft = getDaysRemaining();
+      const unchecked = state.milestones.filter(m => !m.done).length;
+
+      if (unchecked === 0 && state.milestones.length > 0) applyEmotionVisuals("love");
+      else if (daysLeft <= 1.5 && unchecked > 0) applyEmotionVisuals("worried");
+      else if (daysLeft <= 3.5) applyEmotionVisuals("hyped");
+      else if (hour >= 23 || hour < 6) applyEmotionVisuals("sleepy");
+      else applyEmotionVisuals("calm");
+    }
+
+    function expressLumo(emoKey, speechText, particles = ["✨"]) {
+      applyEmotionVisuals(emoKey);
+      document.getElementById("lumo-speech-text").textContent = `"${speechText}"`;
+      if (particles && particles.length) spawnParticles(particles);
+    }
+
+    function applyEmotionVisuals(emoKey) {
+      currentEmotion = emoKey;
+      const cfg = EMOTIONS[emoKey] || EMOTIONS.calm;
+
+      document.getElementById("grad-stop-1").setAttribute("stop-color", cfg.stops[0]);
+      document.getElementById("grad-stop-2").setAttribute("stop-color", cfg.stops[1]);
+      document.getElementById("grad-stop-3").setAttribute("stop-color", cfg.stops[2]);
+      document.getElementById("grad-stop-4").setAttribute("stop-color", cfg.stops[3]);
+      document.getElementById("subsurface-stop").setAttribute("stop-color", cfg.subsurface);
+
+      document.getElementById("lumo-eyes-open").classList.toggle("hidden", cfg.eyes !== "open");
+      document.getElementById("lumo-eyes-happy").classList.toggle("hidden", cfg.eyes !== "happy");
+      document.getElementById("lumo-eyes-sleepy").classList.toggle("hidden", cfg.eyes !== "sleepy");
+      document.getElementById("lumo-eyes-love").classList.toggle("hidden", cfg.eyes !== "love");
+
+      document.getElementById("lumo-glasses").classList.toggle("hidden", !cfg.glasses);
+      document.getElementById("lumo-brows-worried").classList.toggle("hidden", !cfg.worried);
+      document.getElementById("lumo-sweat").classList.toggle("hidden", !cfg.sweat);
+      document.getElementById("lumo-zzz").classList.toggle("hidden", !cfg.zzz);
+
+      const mouth = document.getElementById("lumo-mouth");
+      const mouthOpen = document.getElementById("lumo-mouth-open");
+      mouth.classList.remove("hidden");
+      mouthOpen.classList.add("hidden");
+
+      if (cfg.mouth === "open") {
+        mouth.classList.add("hidden");
+        mouthOpen.classList.remove("hidden");
+      } else if (cfg.mouth === "flat") {
+        mouth.setAttribute("d", "M 102,123 Q 110,124 118,123");
+      } else if (cfg.mouth === "wavy") {
+        mouth.setAttribute("d", "M 100,125 Q 105,120 110,124 Q 115,128 120,123");
+      } else if (cfg.mouth === "small") {
+        mouth.setAttribute("d", "M 106,123 Q 110,126 114,123");
+      } else {
+        mouth.setAttribute("d", "M 101,122 Q 110,130 119,122");
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // PANELS & LUMO POSITION SHIFTING
+    // -----------------------------------------------------------------------
+    function openPanelDirectly(panelKey) {
+      if (!menuVisible) {
+        menuVisible = true;
+        const actionsEl = document.getElementById("radial-actions");
+        actionsEl.classList.remove("hidden", "opacity-0", "pointer-events-none", "scale-95");
+        actionsEl.classList.add("flex");
+      }
+      togglePanel(panelKey);
+    }
+
+    function togglePanel(panelKey) {
+      if (activePanelKey === panelKey) {
+        closeActivePanel();
+        return;
+      }
+      activePanelKey = panelKey;
+
+      const wrap = document.getElementById("active-panel-container");
+      const panels = {
+        roadmap: document.getElementById("panel-roadmap"),
+        focus: document.getElementById("panel-focus"),
+        reminder: document.getElementById("panel-reminder"),
+        customise: document.getElementById("panel-customise")
+      };
+
+      Object.keys(panels).forEach(k => {
+        panels[k].classList.toggle("hidden", k !== panelKey);
+      });
+      wrap.classList.remove("hidden");
+      document.getElementById("lumo-stage").style.transform = "translateY(-6px) scale(0.95)";
+
+      if (panelKey === "roadmap") expressLumo("happy", "Roadmap open! Check tasks or plan your milestones 📋", ["📋", "✨"]);
+      else if (panelKey === "focus") expressLumo("focused", "Select sprint time and tap Start! 🤓⏱️", ["⏱️", "💡"]);
+      else if (panelKey === "reminder") expressLumo("calm", "Set date, time & note for your lock screen badge! 🔔", ["🔔"]);
+      else if (panelKey === "customise") expressLumo("excited", "Customise glass style, colors & wallpapers! ✨🖼️", ["✨", "🖼️"]);
+    }
+
+    function closeActivePanel() {
+      activePanelKey = null;
+      document.getElementById("active-panel-container").classList.add("hidden");
+      document.getElementById("lumo-stage").style.transform = "translateY(0px) scale(1)";
+      syncAutoEmotion();
+    }
+
+    function saveQuickReminder() {
+      state.quickReminder = document.getElementById("inp-quick-reminder").value;
+      state.quickReminderDate = document.getElementById("reminder-date").value;
+      state.quickReminderTime = document.getElementById("reminder-time").value;
+      saveState();
+      renderAll();
+      showToast(state.quickReminder ? "Note saved!" : "Note cleared");
+      expressLumo("excited", state.quickReminder ? `Note saved: "${state.quickReminder}" 📝` : "Note cleared! ✨", ["📝"]);
+      closeActivePanel();
+    }
+
+    function updateGlassStyle() {
+      const slider = document.getElementById("slider-opacity");
+      const label = document.getElementById("lbl-glass-opacity");
+      if (slider) {
+        state.glassOpacity = parseInt(slider.value, 10) || 0;
+      } else {
+        state.glassOpacity = typeof state.glassOpacity === "number" ? state.glassOpacity : 18;
+      }
+      if (label) {
+        label.textContent = `${state.glassOpacity}%`;
+      }
+      document.documentElement.style.setProperty("--lg-tint-opacity", (state.glassOpacity / 100).toFixed(2));
+      saveState();
+    }
+
+    function updateColors() {
+      state.primaryTextColor = document.getElementById("color-primary-text").value;
+      state.accentColor = document.getElementById("color-accent").value;
+      state.boxTint = document.getElementById("color-box-tint").value;
+      applyColorsToDOM();
+      saveState();
+    }
+
+    function resetColors() {
+      state.primaryTextColor = "#ffffff";
+      state.accentColor = "#fde047";
+      state.boxTint = "#ffffff";
+      document.getElementById("color-primary-text").value = "#ffffff";
+      document.getElementById("color-accent").value = "#fde047";
+      document.getElementById("color-box-tint").value = "#ffffff";
+      applyColorsToDOM();
+      saveState();
+      showToast("Colors reset");
+    }
+
+    function applyColorsToDOM() {
+      document.documentElement.style.setProperty("--lg-primary-text", state.primaryTextColor || "#ffffff");
+      document.documentElement.style.setProperty("--lg-accent-color", state.accentColor || "#fde047");
+
+      if (state.boxTint) {
+        // Convert hex to RGB
+        const hex = state.boxTint.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16) || 255;
+        const g = parseInt(hex.substring(2, 4), 16) || 255;
+        const b = parseInt(hex.substring(4, 6), 16) || 255;
+        document.documentElement.style.setProperty("--lg-box-tint", `${r}, ${g}, ${b}`);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // LIVE WALLPAPERS & STATIC PHOTO SYSTEM
+    // -----------------------------------------------------------------------
+    function initLiveWallpaperCanvases() {
+      const keys = ["aurora", "cosmic", "prism", "embers", "ocean", "velvet"];
+      keys.forEach(k => {
+        const c = document.getElementById(`live-${k}-canvas`);
+        canvases[k] = { el: c, ctx: c.getContext("2d") };
+      });
+
+      const resize = () => {
+        Object.values(canvases).forEach(item => {
+          item.el.width = window.innerWidth;
+          item.el.height = window.innerHeight;
+        });
+      };
+      window.addEventListener("resize", resize);
+      resize();
+
+      let time = 0;
+      const animateWallpapers = () => {
+        time += 0.015;
+        if (state.wallpaperMode === "live-aurora") drawAurora(time);
+        else if (state.wallpaperMode === "live-cosmic") drawCosmic(time);
+        else if (state.wallpaperMode === "live-prism") drawPrism(time);
+        else if (state.wallpaperMode === "live-embers") drawEmbers(time);
+        else if (state.wallpaperMode === "live-ocean") drawOcean(time);
+        else if (state.wallpaperMode === "live-velvet") drawVelvet(time);
+        animFrameId = requestAnimationFrame(animateWallpapers);
+      };
+      animateWallpapers();
+    }
+
+    function drawAurora(t) {
+      const { ctx, el } = canvases.aurora;
+      ctx.fillStyle = "#050508";
+      ctx.fillRect(0, 0, el.width, el.height);
+      const g1 = ctx.createRadialGradient(el.width * 0.3 + Math.sin(t * 0.8) * 80, el.height * 0.3 + Math.cos(t * 0.6) * 60, 20, el.width * 0.3, el.height * 0.3, el.width * 0.7);
+      g1.addColorStop(0, "rgba(168, 85, 247, 0.35)");
+      g1.addColorStop(1, "rgba(5, 5, 8, 0)");
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, el.width, el.height);
+    }
+
+    function drawCosmic(t) {
+      const { ctx, el } = canvases.cosmic;
+      ctx.fillStyle = "#04040A";
+      ctx.fillRect(0, 0, el.width, el.height);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+      for (let i = 0; i < 45; i++) {
+        const x = (Math.sin(i * 99 + t * 0.2) * 0.5 + 0.5) * el.width;
+        const y = (Math.cos(i * 33 + t * 0.15) * 0.5 + 0.5) * el.height;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawPrism(t) {
+      const { ctx, el } = canvases.prism;
+      ctx.fillStyle = "#07040D";
+      ctx.fillRect(0, 0, el.width, el.height);
+      const g = ctx.createLinearGradient(0, 0, el.width, el.height);
+      g.addColorStop(0, `rgba(244, 63, 94, ${0.2 + Math.sin(t) * 0.1})`);
+      g.addColorStop(0.5, `rgba(99, 102, 241, ${0.2 + Math.cos(t * 0.8) * 0.1})`);
+      g.addColorStop(1, `rgba(20, 184, 166, ${0.2 + Math.sin(t * 1.2) * 0.1})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, el.width, el.height);
+    }
+
+    function drawEmbers(t) {
+      const { ctx, el } = canvases.embers;
+      ctx.fillStyle = "#0A0302";
+      ctx.fillRect(0, 0, el.width, el.height);
+      ctx.fillStyle = "rgba(249, 115, 22, 0.7)";
+      for (let i = 0; i < 30; i++) {
+        const x = (Math.sin(i * 77 + t * 0.1) * 0.5 + 0.5) * el.width;
+        const y = ((i * 40 - t * 60) % el.height + el.height) % el.height;
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function drawOcean(t) {
+      const { ctx, el } = canvases.ocean;
+      ctx.fillStyle = "#020B14";
+      ctx.fillRect(0, 0, el.width, el.height);
+      const g = ctx.createRadialGradient(el.width * 0.5, el.height * 0.7 + Math.sin(t) * 40, 30, el.width * 0.5, el.height * 0.7, el.width * 0.7);
+      g.addColorStop(0, "rgba(13, 148, 136, 0.3)");
+      g.addColorStop(1, "rgba(2, 11, 20, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, el.width, el.height);
+    }
+
+    function drawVelvet(t) {
+      const { ctx, el } = canvases.velvet;
+      ctx.fillStyle = "#09020D";
+      ctx.fillRect(0, 0, el.width, el.height);
+      const g = ctx.createRadialGradient(el.width * 0.4, el.height * 0.4, 20, el.width * 0.4, el.height * 0.4, el.width * 0.8);
+      g.addColorStop(0, "rgba(219, 39, 119, 0.25)");
+      g.addColorStop(1, "rgba(9, 2, 13, 0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, el.width, el.height);
+    }
+
+    function setWallpaperMode(mode) {
+      state.wallpaperMode = mode;
+      saveState();
+      applyWallpaperUI();
+      showToast(`Wallpaper: ${mode.replace('live-', 'Live ').replace('-', ' ')}`);
+    }
+
+    function setStaticWallpaper(key) {
+      state.wallpaperMode = `static-${key}`;
+      saveState();
+      applyWallpaperUI();
+      showToast("Normal wallpaper set!");
+    }
+
+    function handleCustomWallpaperUpload(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        state.wallpaperMode = "custom";
+        state.customWallpaperDataUrl = ev.target.result;
+        saveState();
+        applyWallpaperUI();
+        showToast("Custom photo uploaded!");
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function applyWallpaperUI() {
+      Object.keys(canvases).forEach(k => canvases[k].el.classList.add("hidden"));
+      const img = document.getElementById("static-wallpaper-img");
+      const scrim = document.getElementById("wallpaper-scrim");
+
+      img.classList.add("hidden");
+      scrim.classList.add("hidden");
+
+      if (state.wallpaperMode.startsWith("live-")) {
+        const key = state.wallpaperMode.replace("live-", "");
+        if (canvases[key]) canvases[key].el.classList.remove("hidden");
+      } else if (state.wallpaperMode === "custom" && state.customWallpaperDataUrl) {
+        img.src = state.customWallpaperDataUrl;
+        img.classList.remove("hidden");
+        scrim.classList.remove("hidden");
+      } else if (state.wallpaperMode.startsWith("static-")) {
+        const key = state.wallpaperMode.replace("static-", "");
+        if (STATIC_WALLPAPERS[key]) {
+          img.src = STATIC_WALLPAPERS[key];
+          img.classList.remove("hidden");
+          scrim.classList.remove("hidden");
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // LUMO KINEMATICS & PARTICLES
+    // -----------------------------------------------------------------------
+    function saveState() {
+      try {
+        localStorage.setItem("lumo_standalone_v8", JSON.stringify(state));
+      } catch (e) {}
+    }
+
+    function playLumoAnimation(animName) {
+      const group = document.getElementById("lumo-body-group");
+      if (!group) return;
+      const animClasses = [
+        "anim-bounce", "anim-headshake", "anim-sway", "anim-dance",
+        "anim-sad-droop", "anim-nod-puff", "anim-slide", "anim-pop",
+        "anim-squish", "anim-morph", "anim-drop-land",
+        "anim-bump-left", "anim-bump-right", "anim-bump-top", "anim-bump-bottom"
+      ];
+      group.classList.remove(...animClasses);
+      void group.offsetWidth;
+      group.classList.add(`anim-${animName}`);
+      setTimeout(() => {
+        group.classList.remove(`anim-${animName}`);
+      }, 950);
+    }
+
+    function handleLumoClick(e) {
+      if (e) e.stopPropagation();
+      clickCount += 1;
+
+      if (clickTimer) clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => {
+        if (clickCount === 1) {
+          let bumpAnim = null;
+          const hit = document.getElementById("lumo-hit-area");
+          if (hit && e && typeof e.clientX === "number") {
+            const rect = hit.getBoundingClientRect();
+            const dx = e.clientX - (rect.left + rect.width / 2);
+            const dy = e.clientY - (rect.top + rect.height / 2);
+            if (Math.abs(dx) > Math.abs(dy)) {
+              bumpAnim = dx < 0 ? "bump-left" : "bump-right";
+            } else if (Math.abs(dy) > 12) {
+              bumpAnim = dy < 0 ? "bump-top" : "bump-bottom";
+            }
+          }
+
+          msgIndex = (msgIndex + 1) % TAP_MESSAGES.length;
+          const item = TAP_MESSAGES[msgIndex];
+          playLumoAnimation(bumpAnim || item.anim);
+          expressLumo(item.emo, item.text, item.particles);
+        } else if (clickCount >= 2) {
+          toggleRadialMenu();
+        }
+        clickCount = 0;
+      }, 240);
+    }
+
+    function toggleRadialMenu() {
+      menuVisible = !menuVisible;
+      const actionsEl = document.getElementById("radial-actions");
+      if (!actionsEl) return;
+
+      if (menuVisible) {
+        actionsEl.classList.remove("hidden", "opacity-0", "pointer-events-none", "scale-95");
+        actionsEl.classList.add("flex", "opacity-100", "scale-100");
+        playLumoAnimation("pop");
+      } else {
+        closeActivePanel();
+        actionsEl.classList.remove("flex", "opacity-100", "scale-100");
+        actionsEl.classList.add("hidden", "opacity-0", "pointer-events-none", "scale-95");
+      }
+    }
+
+    function autonomousIdleShift() {
+      if (activePanelKey || focusSprintActive) return;
+      const idlePool = ["calm", "happy", "love", "sleepy"];
+      const nextEmo = idlePool[Math.floor(Math.random() * idlePool.length)];
+      applyEmotionVisuals(nextEmo);
+      const idleAnim = nextEmo === "sleepy" ? "headshake" : nextEmo === "love" ? "sway" : "morph";
+      playLumoAnimation(idleAnim);
+    }
+
+    function trackPupils(e) {
+      const svg = document.getElementById("lumo-svg");
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const dx = Math.max(-3.5, Math.min(3.5, ((e.clientX - cx) / window.innerWidth) * 12));
+      const dy = Math.max(-3.5, Math.min(3.5, ((e.clientY - cy) / window.innerHeight) * 12));
+
+      const pL = document.getElementById("pupil-left");
+      const pR = document.getElementById("pupil-right");
+      if (pL && pR) {
+        pL.setAttribute("cx", 88 + dx);
+        pL.setAttribute("cy", 102 + dy);
+        pR.setAttribute("cx", 136 + dx);
+        pR.setAttribute("cy", 102 + dy);
+      }
+    }
+
+    function triggerNaturalBlink() {
+      if (EMOTIONS[currentEmotion]?.eyes !== "open") return;
+      const openEyes = document.getElementById("lumo-eyes-open");
+      const happyEyes = document.getElementById("lumo-eyes-happy");
+      openEyes.classList.add("hidden");
+      happyEyes.classList.remove("hidden");
+      setTimeout(() => {
+        if (EMOTIONS[currentEmotion]?.eyes === "open") {
+          openEyes.classList.remove("hidden");
+          happyEyes.classList.add("hidden");
+        }
+      }, 160);
+    }
+
+    function spawnParticles(symbols) {
+      const container = document.getElementById("lumo-particles");
+      if (!container) return;
+
+      symbols.forEach((sym, i) => {
+        const el = document.createElement("span");
+        el.textContent = sym;
+        const offsetX = (i - (symbols.length - 1) / 2) * 32 + (Math.random() * 12 - 6);
+        el.className = "particle-anim absolute text-sm select-none pointer-events-none z-30";
+        el.style.left = `calc(50% + ${offsetX.toFixed(0)}px)`;
+        el.style.top = `40%`;
+        el.style.animationDelay = `${i * 80}ms`;
+        container.appendChild(el);
+        setTimeout(() => el.remove(), 1500);
+      });
+    }
+
+    function setFocusPreset(mins) {
+      focusSecondsRemaining = mins * 60;
+      document.getElementById("focus-timer-display").textContent = `${String(mins).padStart(2, "0")}:00`;
+      document.getElementById("focus-btn-label").textContent = `${mins}m Focus`;
+    }
+
+    function setCustomFocusMins(val) {
+      const mins = Math.max(1, parseInt(val, 10) || 15);
+      setFocusPreset(mins);
+    }
+
+    function toggleFocusSprint() {
+      const label = document.getElementById("focus-btn-label");
+      const display = document.getElementById("focus-timer-display");
+      const startBtn = document.getElementById("focus-start-btn");
+
+      if (focusSprintActive) {
+        focusSprintActive = false;
+        clearInterval(focusInterval);
+        focusSecondsRemaining = 15 * 60;
+        label.textContent = "15m Focus";
+        display.textContent = "15:00";
+        startBtn.textContent = "Start Sprint";
+        syncAutoEmotion();
+      } else {
+        focusSprintActive = true;
+        expressLumo("focused", "Focus mode on! Quiet sprint starting now 🤓⏱️", ["💡", "📘"]);
+        playLumoAnimation("nod-puff");
+        startBtn.textContent = "Pause Sprint";
+
+        focusInterval = setInterval(() => {
+          focusSecondsRemaining--;
+          const m = Math.floor(focusSecondsRemaining / 60);
+          const s = focusSecondsRemaining % 60;
+          const formatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+          display.textContent = formatted;
+          label.textContent = formatted;
+
+          if (focusSecondsRemaining <= 0) {
+            clearInterval(focusInterval);
+            focusSprintActive = false;
+            label.textContent = "15m Focus";
+            display.textContent = "15:00";
+            startBtn.textContent = "Start Sprint";
+            playLumoAnimation("dance");
+            expressLumo("excited", "Focus sprint complete! You rock 🤩🎉", ["🎉", "🌟"]);
+          }
+        }, 1000);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // REAL-TIME CLOCKS & GOALS
+    // -----------------------------------------------------------------------
+    function updateClocks() {
+      const now = new Date();
+      document.getElementById("lock-date").textContent = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+      document.getElementById("lock-time").textContent = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+      const target = new Date(state.deadline).getTime();
+      const diff = Math.max(0, target - now.getTime());
+
+      document.getElementById("cd-days").textContent = String(Math.floor(diff / (1000 * 60 * 60 * 24))).padStart(2, "0");
+      document.getElementById("cd-hours").textContent = String(Math.floor((diff / (1000 * 60 * 60)) % 24)).padStart(2, "0");
+      document.getElementById("cd-mins").textContent = String(Math.floor((diff / (1000 * 60)) % 60)).padStart(2, "0");
+      document.getElementById("cd-secs").textContent = String(Math.floor((diff / 1000) % 60)).padStart(2, "0");
+    }
+
+    function syncGoalDetails() {
+      state.title = document.getElementById("inp-goal-title").value || "HANDSHAKE MISSION";
+      state.deadline = document.getElementById("inp-deadline").value || state.deadline;
+      saveState();
+      renderAll(true);
+      updateClocks();
+    }
+
+    function autoGenerateTMinus() {
+      const days = Math.max(2, Math.ceil(getDaysRemaining()));
+      const d1 = Math.max(1, Math.round(days * 0.85));
+      const d2 = Math.max(1, Math.round(days * 0.5));
+      const d3 = Math.max(1, Math.round(days * 0.2));
+
+      state.milestones = [
+        { tag: `T-${d1}`, text: "Organize core plan & scope", done: true },
+        { tag: `T-${d2}`, text: "Complete core execution phase", done: false },
+        { tag: `T-${d3}`, text: "Review, refine & polish", done: false },
+        { tag: "T-1", text: "Final check & submission", done: false }
+      ];
+      saveState();
+      renderAll(true);
+      playLumoAnimation("dance");
+      showToast("Auto-planned T-Minus roadmap!");
+    }
+
+    // -----------------------------------------------------------------------
+    // EXPORT & REMINDER DOWNLOADS
+    // -----------------------------------------------------------------------
+    function exportWallpaperPNG() {
+      const canvas = document.getElementById("wallpaper-export-canvas");
+      const W = 1170;
+      const H = 2532;
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
+
+      ctx.fillStyle = "#050508";
+      ctx.fillRect(0, 0, W, H);
+
+      // Goal Title & Countdown Card
+      ctx.textAlign = "center";
+      ctx.font = "800 38px 'Plus Jakarta Sans', sans-serif";
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText((state.title || "HANDSHAKE MISSION").toUpperCase(), W / 2, H * 0.26);
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.22)";
+      ctx.beginPath();
+      ctx.roundRect(W * 0.08, H * 0.29, W * 0.84, 210, 44);
+      ctx.fill();
+
+      const target = new Date(state.deadline).getTime();
+      const diff = Math.max(0, target - Date.now());
+      const days = String(Math.floor(diff / (1000 * 60 * 60 * 24))).padStart(2, "0");
+      const hours = String(Math.floor((diff / (1000 * 60 * 60)) % 24)).padStart(2, "0");
+      const mins = String(Math.floor((diff / (1000 * 60)) % 60)).padStart(2, "0");
+
+      const cols = [{ val: days, lbl: "DAYS" }, { val: hours, lbl: "HOURS" }, { val: mins, lbl: "MINS" }];
+      cols.forEach((c, i) => {
+        const cx = W * 0.08 + (W * 0.84 / 3) * (i + 0.5);
+        ctx.font = "800 86px 'Plus Jakarta Sans', sans-serif";
+        ctx.fillStyle = i === 0 ? "#FDE047" : "#FFFFFF";
+        ctx.fillText(c.val, cx, H * 0.29 + 125);
+        ctx.font = "700 24px 'Inter', sans-serif";
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.fillText(c.lbl, cx, H * 0.29 + 172);
+      });
+
+      // Lumo Character
+      const cx = W / 2;
+      const cy = H * 0.54;
+      const r = 160;
+      const cfg = EMOTIONS[currentEmotion] || EMOTIONS.calm;
+
+      const bodyGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      bodyGrad.addColorStop(0, cfg.stops[0]);
+      bodyGrad.addColorStop(0.5, cfg.stops[1]);
+      bodyGrad.addColorStop(1, cfg.stops[3]);
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = bodyGrad;
+      ctx.fill();
+
+      ctx.fillStyle = "#0F172A";
+      ctx.beginPath();
+      ctx.ellipse(cx - r * 0.3, cy - r * 0.05, r * 0.12, r * 0.15, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + r * 0.3, cy - r * 0.05, r * 0.12, r * 0.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const link = document.createElement("a");
+      link.download = "LUMO-LockScreen.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      showToast("Saved Lock Screen PNG!");
+    }
+
+    function downloadICSReminders() {
+      const targetDate = new Date(state.deadline);
+      let events = "";
+
+      state.milestones.forEach((m, i) => {
+        const match = m.tag.match(/T-(\d+)/i);
+        const offsetDays = match ? parseInt(match[1], 10) : (state.milestones.length - i);
+        const evDate = new Date(targetDate);
+        evDate.setDate(evDate.getDate() - offsetDays);
+        evDate.setHours(19, 0, 0, 0);
+
+        const pad = (n) => String(n).padStart(2, "0");
+        const dtStr = `${evDate.getFullYear()}${pad(evDate.getMonth() + 1)}${pad(evDate.getDate())}T190000`;
+
+        events += [
+          "BEGIN:VEVENT",
+          `UID:lumo-${Date.now()}-${i}@lumo.lockscreen`,
+          `DTSTART:${dtStr}`,
+          `SUMMARY:LUMO (${m.tag}): ${m.text}`,
+          "END:VEVENT"
+        ].join("\r\n") + "\r\n";
+      });
+
+      const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", events.trim(), "END:VCALENDAR"].join("\r\n");
+      const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "LUMO-Reminders.ics";
+      a.click();
+      showToast("Downloaded .ICS Reminders!");
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      document.getElementById("toast-msg").textContent = msg;
+      toast.classList.remove("opacity-0", "-translate-y-3");
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.add("opacity-0", "-translate-y-3");
+      }, 2500);
+    }
+
+    function escapeHTML(str) {
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>
